@@ -1,0 +1,12 @@
+{
+	"schemaVersion": 1,
+	"id": "minerbot",
+	"version": "${version}",
+	"name": "MinerBot",
+	"environment": "client",
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.1.2",
+		"java": ">=25"
+	}
+}
