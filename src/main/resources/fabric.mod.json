@@ -3,10 +3,30 @@
 	"id": "minerbot",
 	"version": "${version}",
 	"name": "MinerBot",
+	"description": "A client-side bot that mines a selected block type inside a marked region and duplicates marked structures, moving and acting like a player.",
+	"authors": [
+		"MinerBot"
+	],
+	"license": "MIT",
 	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.minerbot.MinerBotClient"
+		],
+		"fabric-client-gametest": [
+			"com.minerbot.gametest.MinerBotGameTest"
+		]
+	},
+	"mixins": [
+		{
+			"config": "minerbot.mixins.json",
+			"environment": "client"
+		}
+	],
 	"depends": {
 		"fabricloader": ">=0.19.5",
 		"minecraft": "~26.1.2",
-		"java": ">=25"
+		"java": ">=25",
+		"fabric-api": "*"
 	}
 }

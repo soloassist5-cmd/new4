@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "com.minerbot.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ClientInputAccessor",
+		"KeyboardInputMixin",
+		"MinecraftMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

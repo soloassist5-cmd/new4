@@ -5,6 +5,22 @@ plugins {
 repositories {
 }
 
+loom {
+	runs {
+		// End-to-end check: boots a real client, makes a world and drives the bot through it.
+		// See src/main/java/com/minerbot/gametest.
+		clientGametest {
+			client()
+			name = 'Client Gametest'
+			// The framework's mixin plugin gates on the bare flag; the modid picks whose tests run.
+			vmArg '-Dfabric.client.gametest'
+			vmArg '-Dfabric.client.gametest.modid=minerbot'
+			runDir = 'build/run/gametest'
+			ideConfigGenerated = false
+		}
+	}
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
