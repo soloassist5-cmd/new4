@@ -2,6 +2,7 @@ package com.minerbot.bot;
 
 import org.jspecify.annotations.Nullable;
 
+import com.minerbot.screen.MinerBotScreen;
 import com.minerbot.task.BotTask;
 
 import net.minecraft.ChatFormatting;
@@ -75,20 +76,22 @@ public final class BotController {
 			return;
 		}
 
-		if (client.screen != null) {
-			// A menu is open: hold still rather than walk blindly while the player is busy.
+		// Any other screen means the player is busy, so hold still rather than walk blindly. The
+		// mod's own menu is the exception: it is where the job is watched from, and freezing the
+		// bot the moment it is opened would make the status line useless.
+		if (client.screen != null && !(client.screen instanceof MinerBotScreen)) {
 			BotInputState.release();
 			BotRuntime.setDrivingBreakLoop(false);
 			return;
 		}
 
 		if (playerTookOver(client.options)) {
-			stop(message("stopped — you took the controls", ChatFormatting.YELLOW));
+			stop(Component.translatable("minerbot.stopped.player_input").withStyle(ChatFormatting.YELLOW));
 			return;
 		}
 
 		if (player.getHealth() <= HEALTH_FLOOR) {
-			stop(message("stopped — health is low", ChatFormatting.RED));
+			stop(Component.translatable("minerbot.stopped.low_health").withStyle(ChatFormatting.RED));
 			return;
 		}
 
@@ -98,9 +101,10 @@ public final class BotController {
 		BotTask current = task;
 
 		switch (current.tick(player)) {
-			case FINISHED -> stop(message(current.name() + " finished", ChatFormatting.GREEN));
-			case FAILED -> stop(Component.literal(current.name() + ": ").withStyle(ChatFormatting.RED)
-					.append(current.status()));
+			case FINISHED -> stop(Component.translatable("minerbot.finished", current.label())
+					.withStyle(ChatFormatting.GREEN));
+			case FAILED -> stop(Component.translatable("minerbot.failed", current.label(), current.status())
+					.withStyle(ChatFormatting.RED));
 			case RUNNING -> {
 				// Keep going next tick.
 			}
@@ -113,10 +117,6 @@ public final class BotController {
 				|| options.keyLeft.isDown()
 				|| options.keyRight.isDown()
 				|| options.keyJump.isDown();
-	}
-
-	private static Component message(String text, ChatFormatting colour) {
-		return Component.literal(text).withStyle(colour);
 	}
 
 	/** Sends a prefixed line to the player's chat, client-side only. */

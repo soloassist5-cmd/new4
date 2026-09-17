@@ -65,8 +65,8 @@ public final class MineTask implements BotTask {
 	}
 
 	@Override
-	public String name() {
-		return "mine";
+	public Component label() {
+		return Component.translatable("minerbot.task.mine");
 	}
 
 	@Override
@@ -219,11 +219,11 @@ public final class MineTask implements BotTask {
 
 	@Override
 	public Component status() {
-		String target = wanted.isEmpty()
-				? "everything"
-				: wanted.stream().map(Registries::nameOf).reduce((a, b) -> a + ", " + b).orElse("");
+		Component target = wanted.isEmpty()
+				? Component.translatable("minerbot.status.everything")
+				: Component.literal(wanted.stream().map(Registries::nameOf).reduce((a, b) -> a + ", " + b).orElse(""));
 
-		return Component.literal("mining %s | broken %d | left ~%d".formatted(target, mined, remaining()))
+		return Component.translatable("minerbot.status.mining", target, mined, remaining())
 				.withStyle(ChatFormatting.GRAY);
 	}
 

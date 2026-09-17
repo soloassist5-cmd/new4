@@ -40,12 +40,14 @@ public final class BotHud {
 			int y = MARGIN;
 
 			if (task != null) {
-				y = line(graphics, Component.literal("MinerBot: " + task.name()).withStyle(ChatFormatting.AQUA), y);
+				y = line(graphics, Component.translatable("minerbot.hud.task", task.label())
+						.withStyle(ChatFormatting.AQUA), y);
 				y = line(graphics, task.status(), y);
 			}
 
 			if (region != null) {
-				line(graphics, Component.literal("selection " + region).withStyle(ChatFormatting.GRAY), y);
+				line(graphics, Component.translatable("minerbot.screen.selection", region.toString(), region.volume())
+						.withStyle(ChatFormatting.GRAY), y);
 			}
 		});
 	}

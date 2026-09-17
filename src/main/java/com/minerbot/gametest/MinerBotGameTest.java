@@ -1,12 +1,11 @@
 package com.minerbot.gametest;
 
-import java.util.Set;
-
-import com.minerbot.blueprint.Blueprint;
 import com.minerbot.bot.BotController;
+import com.minerbot.config.BotSettings;
+import com.minerbot.config.BuildDirection;
+import com.minerbot.screen.MinerBotScreen;
 import com.minerbot.selection.Region;
-import com.minerbot.task.BuildTask;
-import com.minerbot.task.MineTask;
+import com.minerbot.selection.SelectionManager;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -14,11 +13,14 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 
 /**
- * Drives the bot end to end in a real client against a real server.
+ * Drives the bot end to end in a real client against a real server, through the menu.
+ *
+ * <p>Both jobs are started by clicking the buttons a player clicks, so the test covers the screen
+ * wiring as well as the bot: a button that is missing, mislabelled or left disabled fails the run
+ * before the world is ever checked.
  *
  * <p>Run it with {@code ./gradlew runClientGametest}. The arena is built with commands on a
  * platform far from spawn so world generation cannot interfere with the result.
@@ -45,6 +47,7 @@ public class MinerBotGameTest implements FabricClientGameTest {
 			singleplayer.getClientLevel().waitForChunksRender();
 			context.waitTicks(20);
 
+			testCornerButton(context);
 			testMining(context, server);
 			testBuilding(context, server);
 		}
@@ -70,7 +73,26 @@ public class MinerBotGameTest implements FabricClientGameTest {
 		server.runCommand("give @a minecraft:oak_fence 64");
 	}
 
-	/** Mines a 3x1x3 patch of iron ore and checks every block is gone. */
+	/** The corner button marks something, so the menu is wired to the selection. */
+	private void testCornerButton(ClientGameTestContext context) {
+		context.runOnClient(client -> SelectionManager.get().clear());
+		openMenu(context);
+		context.clickScreenButton("minerbot.screen.corner1");
+
+		boolean marked = context.computeOnClient(client -> SelectionManager.get().first() != null);
+		assertThat(marked, "the corner button did not mark anything");
+
+		// Saved for eyeballing the layout; nothing asserts on it.
+		context.takeScreenshot("minerbot-menu");
+
+		context.clickScreenButton("minerbot.screen.clear");
+		boolean cleared = context.computeOnClient(client -> SelectionManager.get().first() == null);
+		assertThat(cleared, "the clear button did not clear the selection");
+
+		closeMenu(context);
+	}
+
+	/** Mines a 3x1x3 patch of iron ore, started from the menu, and checks every block is gone. */
 	private void testMining(ClientGameTestContext context, TestServerContext server) {
 		BlockPos oreMin = new BlockPos(8, WORK_Y, 8);
 		BlockPos oreMax = new BlockPos(10, WORK_Y, 10);
@@ -80,14 +102,19 @@ public class MinerBotGameTest implements FabricClientGameTest {
 		context.waitTicks(10);
 
 		Region region = Region.of(oreMin, oreMax);
-		int queued = context.computeOnClient(client -> {
-			MineTask task = new MineTask(region, Set.of(Blocks.IRON_ORE), null, false);
-			int found = task.scan(client.player);
-			BotController.get().start(task);
-			return found;
+		context.runOnClient(client -> {
+			SelectionManager.get().setFirst(oreMin);
+			SelectionManager.get().setSecond(oreMax);
+			BotSettings.setBlockName("iron_ore");
+			BotSettings.setToolName("");
+			BotSettings.setTunnelling(false);
 		});
 
-		assertThat(queued == 9, "expected 9 ore blocks to be queued, got " + queued);
+		openMenu(context);
+		context.clickScreenButton("minerbot.screen.mine.start");
+
+		assertThat(context.computeOnClient(client -> BotController.get().isRunning()),
+				"the mine button did not start a task");
 
 		waitForBotToStop(context, "mining");
 
@@ -106,7 +133,7 @@ public class MinerBotGameTest implements FabricClientGameTest {
 		assertThat(left == 0, "bot left " + left + " ore block(s) unmined");
 	}
 
-	/** Copies a three-post fence one block south and checks the copy exists. */
+	/** Copies a three-post fence one block south, both steps started from the menu. */
 	private void testBuilding(ClientGameTestContext context, TestServerContext server) {
 		BlockPos fenceMin = new BlockPos(14, WORK_Y, 14);
 		BlockPos fenceMax = new BlockPos(16, WORK_Y, 14);
@@ -115,16 +142,25 @@ public class MinerBotGameTest implements FabricClientGameTest {
 				fenceMin.getX(), fenceMin.getY(), fenceMin.getZ(), fenceMax.getX(), fenceMax.getY(), fenceMax.getZ()));
 		context.waitTicks(10);
 
-		Region source = Region.of(fenceMin, fenceMax);
-		int planned = context.computeOnClient(client -> {
-			Blueprint blueprint = Blueprint.capture(client.level, source);
-			BuildTask task = new BuildTask(blueprint, Direction.SOUTH, 1);
-			int total = task.plan(client.player);
-			BotController.get().start(task);
-			return total;
+		context.runOnClient(client -> {
+			SelectionManager.get().setFirst(fenceMin);
+			SelectionManager.get().setSecond(fenceMax);
+			BotSettings.setBuildDirection(BuildDirection.SOUTH);
+			BotSettings.setCopies(1);
 		});
 
-		assertThat(planned == 3, "expected 3 fence posts to be planned, got " + planned);
+		openMenu(context);
+		context.clickScreenButton("minerbot.screen.build.copy");
+
+		int copied = context.computeOnClient(client -> {
+			var clipboard = BotSettings.clipboard();
+			return clipboard == null ? 0 : clipboard.blockCount();
+		});
+		assertThat(copied == 3, "expected 3 fence posts in the clipboard, got " + copied);
+
+		context.clickScreenButton("minerbot.screen.build.start");
+		assertThat(context.computeOnClient(client -> BotController.get().isRunning()),
+				"the build button did not start a task");
 
 		waitForBotToStop(context, "building");
 
@@ -141,6 +177,16 @@ public class MinerBotGameTest implements FabricClientGameTest {
 		});
 
 		assertThat(built == 3, "bot placed " + built + " of 3 fence posts in the copy");
+	}
+
+	private void openMenu(ClientGameTestContext context) {
+		context.setScreen(() -> MinerBotScreen.open(net.minecraft.client.Minecraft.getInstance()));
+		context.waitTicks(2);
+	}
+
+	private void closeMenu(ClientGameTestContext context) {
+		context.runOnClient(client -> client.setScreen(null));
+		context.waitTicks(2);
 	}
 
 	private void waitForBotToStop(ClientGameTestContext context, String what) {

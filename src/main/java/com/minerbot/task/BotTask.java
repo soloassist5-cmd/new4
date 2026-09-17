@@ -19,8 +19,8 @@ public interface BotTask {
 		FAILED
 	}
 
-	/** Short name shown in chat and on the HUD. */
-	String name();
+	/** Short name shown in chat, on the HUD and in the menu. */
+	Component label();
 
 	Result tick(LocalPlayer player);
 

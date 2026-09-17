@@ -26,6 +26,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.Block;
 
@@ -48,7 +49,7 @@ public final class BuildTask implements BotTask {
 
 	private final List<Blueprint.Placement> queue = new ArrayList<>();
 	private final Set<BlockPos> deferred = new HashSet<>();
-	private final Map<BlockPos, String> reasons = new HashMap<>();
+	private final Map<BlockPos, Component> reasons = new HashMap<>();
 
 	private int cursor;
 	private int totalPlanned;
@@ -61,21 +62,42 @@ public final class BuildTask implements BotTask {
 	/** How many times the whole queue may be retried before giving up. */
 	private static final int MAX_PASSES = 6;
 
-	private static final String REASON_NO_SUPPORT = "nothing to build on";
-	private static final String REASON_UNREACHABLE = "could not get within reach";
+	private static final Component REASON_NO_SUPPORT = Component.translatable("minerbot.build.no_support");
+	private static final Component REASON_UNREACHABLE = Component.translatable("minerbot.build.unreachable");
+	private static final Component REASON_CANNOT_CLEAR = Component.translatable("minerbot.build.cannot_clear");
+	private static final Component REASON_UNKNOWN = Component.translatable("minerbot.build.unknown");
 
-	/** Groups the deferred positions by the reason they were put aside. */
-	private String describeReasons() {
+	/**
+	 * Groups the deferred positions by the reason they were put aside.
+	 *
+	 * <p>Grouped on the rendered text rather than the component itself, so two reasons that read
+	 * the same to the player are counted together whatever built them.
+	 */
+	private Component describeReasons() {
 		Map<String, Integer> counts = new LinkedHashMap<>();
+		Map<String, Component> samples = new LinkedHashMap<>();
 
 		for (BlockPos pos : deferred) {
-			counts.merge(reasons.getOrDefault(pos, "unknown"), 1, Integer::sum);
+			Component reason = reasons.getOrDefault(pos, REASON_UNKNOWN);
+			String text = reason.getString();
+			counts.merge(text, 1, Integer::sum);
+			samples.putIfAbsent(text, reason);
 		}
 
-		return counts.entrySet().stream()
-				.map(entry -> "%d: %s".formatted(entry.getValue(), entry.getKey()))
-				.reduce((a, b) -> a + "; " + b)
-				.orElse("unknown");
+		MutableComponent described = Component.empty();
+		boolean firstEntry = true;
+
+		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+			if (!firstEntry) {
+				described.append("; ");
+			}
+
+			firstEntry = false;
+			described.append(Component.translatable(
+					"minerbot.build.reason_entry", entry.getValue(), samples.get(entry.getKey())));
+		}
+
+		return described;
 	}
 
 	public BuildTask(Blueprint blueprint, Direction direction, int copies) {
@@ -85,8 +107,8 @@ public final class BuildTask implements BotTask {
 	}
 
 	@Override
-	public String name() {
-		return "build";
+	public Component label() {
+		return Component.translatable("minerbot.task.build");
 	}
 
 	/** Where each copy of the structure will land. */
@@ -173,7 +195,7 @@ public final class BuildTask implements BotTask {
 		}
 
 		if (ToolSelector.findHotbarSlot(player.getInventory(), block.asItem()) < 0) {
-			failure = Component.literal("out of " + Registries.nameOf(block) + " in the hotbar")
+			failure = Component.translatable("minerbot.build.out_of", Registries.nameOf(block))
 					.withStyle(ChatFormatting.RED);
 			return Result.FAILED;
 		}
@@ -219,8 +241,8 @@ public final class BuildTask implements BotTask {
 				advance();
 			}
 			case FAILED -> {
-				String reason = placer.refusal();
-				defer(pos, reason == null ? "the placement was refused" : reason);
+				Component reason = placer.refusal();
+				defer(pos, reason == null ? REASON_UNKNOWN : reason);
 			}
 			case WORKING -> {
 				// Aiming or waiting out the placement cooldown.
@@ -238,7 +260,7 @@ public final class BuildTask implements BotTask {
 
 		switch (breaker.tick(player, pos, null)) {
 			case FAILED -> {
-				defer(pos, "could not clear what was in the way");
+				defer(pos, REASON_CANNOT_CLEAR);
 			}
 			case DONE, WORKING -> {
 				// The next tick re-checks what is at the position.
@@ -255,7 +277,7 @@ public final class BuildTask implements BotTask {
 	}
 
 	/** Puts a position aside for the next pass and records why, for the final report. */
-	private void defer(BlockPos pos, String reason) {
+	private void defer(BlockPos pos, Component reason) {
 		deferred.add(pos);
 		reasons.put(pos, reason);
 		advance();
@@ -269,8 +291,8 @@ public final class BuildTask implements BotTask {
 		}
 
 		if (placedThisPass == 0 || ++passes > MAX_PASSES) {
-			failure = Component.literal("%d block(s) could not be placed (%s)"
-					.formatted(deferred.size(), describeReasons())).withStyle(ChatFormatting.RED);
+			failure = Component.translatable("minerbot.build.failed", deferred.size(), describeReasons())
+					.withStyle(ChatFormatting.RED);
 			return Result.FAILED;
 		}
 
@@ -289,8 +311,7 @@ public final class BuildTask implements BotTask {
 			return failure;
 		}
 
-		return Component.literal("building | placed %d/%d | deferred %d | pass %d"
-				.formatted(placed, totalPlanned, deferred.size(), passes + 1))
+		return Component.translatable("minerbot.status.building", placed, totalPlanned, deferred.size(), passes + 1)
 				.withStyle(ChatFormatting.GRAY);
 	}
 

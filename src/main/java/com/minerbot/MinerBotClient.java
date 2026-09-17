@@ -4,6 +4,7 @@ import com.minerbot.bot.BotController;
 import com.minerbot.command.MinerBotCommands;
 import com.minerbot.render.BotHud;
 import com.minerbot.render.RegionParticles;
+import com.minerbot.screen.MinerBotScreen;
 import com.minerbot.selection.Region;
 import com.minerbot.selection.SelectionManager;
 import com.minerbot.task.BotTask;
@@ -25,6 +26,13 @@ import net.minecraft.world.phys.HitResult;
 public final class MinerBotClient implements ClientModInitializer {
 	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(MinerBot.id("main"));
 
+	/** The one key that matters: everything the mod does is reachable from the menu it opens. */
+	private static final KeyMapping OPEN_MENU = new KeyMapping(
+			"key.minerbot.menu", InputConstants.Type.KEYSYM, InputConstants.KEY_RSHIFT, CATEGORY);
+	/**
+	 * Marking corners has its own keys as well, because the crosshair cannot be aimed while the
+	 * menu is open — the camera stops moving with it.
+	 */
 	private static final KeyMapping SET_FIRST_CORNER = new KeyMapping(
 			"key.minerbot.pos1", InputConstants.Type.KEYSYM, InputConstants.KEY_LBRACKET, CATEGORY);
 	private static final KeyMapping SET_SECOND_CORNER = new KeyMapping(
@@ -34,6 +42,7 @@ public final class MinerBotClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		KeyMappingHelper.registerKeyMapping(OPEN_MENU);
 		KeyMappingHelper.registerKeyMapping(SET_FIRST_CORNER);
 		KeyMappingHelper.registerKeyMapping(SET_SECOND_CORNER);
 		KeyMappingHelper.registerKeyMapping(STOP);
@@ -60,6 +69,12 @@ public final class MinerBotClient implements ClientModInitializer {
 			return;
 		}
 
+		while (OPEN_MENU.consumeClick()) {
+			if (client.screen == null) {
+				client.setScreen(MinerBotScreen.open(client));
+			}
+		}
+
 		while (SET_FIRST_CORNER.consumeClick()) {
 			markCorner(client, player, true);
 		}
@@ -70,7 +85,8 @@ public final class MinerBotClient implements ClientModInitializer {
 
 		while (STOP.consumeClick()) {
 			if (BotController.get().isRunning()) {
-				BotController.get().stop(Component.literal("stopped").withStyle(ChatFormatting.YELLOW));
+				BotController.get().stop(
+						Component.translatable("minerbot.stopped").withStyle(ChatFormatting.YELLOW));
 			}
 		}
 	}
@@ -88,9 +104,8 @@ public final class MinerBotClient implements ClientModInitializer {
 			SelectionManager.get().setSecond(pos);
 		}
 
-		BotController.tell(Component.literal("corner %d: %d %d %d"
-				.formatted(first ? 1 : 2, pos.getX(), pos.getY(), pos.getZ()))
-				.withStyle(ChatFormatting.GRAY));
+		BotController.tell(Component.translatable("minerbot.screen.corner_set",
+				first ? 1 : 2, pos.getX(), pos.getY(), pos.getZ()).withStyle(ChatFormatting.GRAY));
 	}
 
 	private static void drawOutlines(Minecraft client) {

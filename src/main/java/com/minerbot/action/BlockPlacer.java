@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -30,7 +31,7 @@ public final class BlockPlacer {
 	private int cooldown;
 	private int backoffTicks;
 	@Nullable
-	private String refusal;
+	private Component refusal;
 
 	public void reset() {
 		cooldown = 0;
@@ -40,12 +41,12 @@ public final class BlockPlacer {
 
 	/** Why the last {@link Progress#FAILED} happened, for the task to report. */
 	@Nullable
-	public String refusal() {
+	public Component refusal() {
 		return refusal;
 	}
 
-	private Progress fail(String reason) {
-		refusal = reason;
+	private Progress fail(String key, Object... args) {
+		refusal = Component.translatable(key, args);
 		return Progress.FAILED;
 	}
 
@@ -71,7 +72,7 @@ public final class BlockPlacer {
 		MultiPlayerGameMode gameMode = client.gameMode;
 
 		if (gameMode == null) {
-			return fail("no game mode");
+			return fail("minerbot.place.no_game_mode");
 		}
 
 		BlockState existing = player.level().getBlockState(pos);
@@ -81,14 +82,14 @@ public final class BlockPlacer {
 		}
 
 		if (!existing.canBeReplaced()) {
-			return fail("the spot is occupied");
+			return fail("minerbot.place.occupied");
 		}
 
 		// The server refuses a block whose shape would land inside an entity. Rather than give up,
 		// walk out of the way the same way a player would and try again next tick.
 		if (!player.level().isUnobstructed(wanted.defaultBlockState(), pos, CollisionContext.of(player))) {
 			if (++backoffTicks > MAX_BACKOFF_TICKS) {
-				return fail("could not step out of the block's way");
+				return fail("minerbot.place.in_the_way");
 			}
 
 			Vec3 away = player.position().subtract(Vec3.atCenterOf(pos));
@@ -102,13 +103,13 @@ public final class BlockPlacer {
 		Item item = wanted.asItem();
 
 		if (!ToolSelector.selectItem(player, item)) {
-			return fail("no " + BuiltInRegistries.ITEM.getKey(item) + " in the hotbar");
+			return fail("minerbot.place.no_item", BuiltInRegistries.ITEM.getKey(item).toString());
 		}
 
 		Support support = findSupport(player, player.getEyePosition(), pos);
 
 		if (support == null) {
-			return fail("no reachable face to click against");
+			return fail("minerbot.place.no_face");
 		}
 
 		if (!AimHelper.aimAt(player, support.hitPoint)) {
